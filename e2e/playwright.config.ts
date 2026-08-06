@@ -25,10 +25,13 @@ export default defineConfig({
   // Boots the FastAPI app before the test run and tears it down after,
   // so `npx playwright test` works standalone without a manually started server.
   webServer: {
-    command: "python3 -m uvicorn app.main:app --host 127.0.0.1 --port " + PORT,
+    command:
+      "HMS_RESET_DATABASE=true DATABASE_URL=sqlite:////private/tmp/hotelmanagement-e2e.db " +
+      ".venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port " +
+      PORT,
     cwd: "..",
     url: `${BASE_URL}/health`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

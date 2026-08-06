@@ -1,0 +1,9 @@
+.git
+.github
+.venv
+e2e
+__pycache__
+*.pyc
+*.db
+.DS_Store
+

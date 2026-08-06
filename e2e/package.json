@@ -2,6 +2,9 @@
   "name": "hotelmanagement-e2e",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "description": "Playwright API tests for the Hotel Management System backend",
   "scripts": {
     "test": "playwright test",

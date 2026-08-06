@@ -1,43 +1,75 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/fixtures";
+
+function isoAfter(days: number): string {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 
 test.describe("Rooms API", () => {
   test("GET /rooms/ lists rooms", async ({ request }) => {
     const response = await request.get("/rooms/");
 
     expect(response.ok()).toBeTruthy();
-    expect(Array.isArray(await response.json())).toBeTruthy();
+    const rooms = await response.json();
+    expect(rooms.length).toBeGreaterThan(0);
+    expect(rooms[0]).toMatchObject({
+      room_number: expect.any(String),
+      room_type: { name: expect.any(String), amenities: expect.any(Array) },
+    });
   });
 
-  test("GET /rooms/available lists available rooms", async ({ request }) => {
-    const response = await request.get("/rooms/available");
-
-    expect(response.ok()).toBeTruthy();
-    expect(Array.isArray(await response.json())).toBeTruthy();
-  });
-
-  test("POST /rooms/ creates a room", async ({ request }) => {
-    const response = await request.post("/rooms/", {
-      data: {
-        number: "101",
-        room_type_id: 1,
+  test("GET /availability returns calculated, non-overlapping stays", async ({ request }) => {
+    const response = await request.get("/availability", {
+      params: {
+        check_in: isoAfter(70),
+        check_out: isoAfter(72),
+        guests: 2,
       },
     });
 
     expect(response.ok()).toBeTruthy();
-    expect(await response.json()).toEqual({ message: "Room created" });
+    const results = await response.json();
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]).toMatchObject({
+      nights: 2,
+      currency: "GBP",
+      nightly_rate: expect.any(Number),
+      subtotal: expect.any(Number),
+      taxes: expect.any(Number),
+      total: expect.any(Number),
+    });
   });
 
-  test("PUT /rooms/{id} updates a room", async ({ request }) => {
-    const response = await request.put("/rooms/1", { data: {} });
+  test("administrators can create, update and delete an unused room", async ({ adminRequest }) => {
+    const number = `T${Date.now().toString().slice(-7)}`;
+    const createResponse = await adminRequest.post("/rooms/", {
+      data: {
+        room_number: number,
+        floor: 5,
+        status: "AVAILABLE",
+        room_type_id: 1,
+        nightly_rate: 149,
+        description: "Created by the API integration test.",
+      },
+    });
+    expect(createResponse.status()).toBe(201);
+    const created = await createResponse.json();
 
-    expect(response.ok()).toBeTruthy();
-    expect(await response.json()).toEqual({ message: "Updated" });
-  });
+    const updateResponse = await adminRequest.put(`/rooms/${created.id}`, {
+      data: {
+        room_number: number,
+        floor: 5,
+        status: "MAINTENANCE",
+        room_type_id: 1,
+        nightly_rate: 159,
+        description: "Updated by the API integration test.",
+      },
+    });
+    expect(updateResponse.ok()).toBeTruthy();
+    expect((await updateResponse.json()).status).toBe("MAINTENANCE");
 
-  test("DELETE /rooms/{id} deletes a room", async ({ request }) => {
-    const response = await request.delete("/rooms/1");
-
-    expect(response.ok()).toBeTruthy();
-    expect(await response.json()).toEqual({ message: "Deleted" });
+    const deleteResponse = await adminRequest.delete(`/rooms/${created.id}`);
+    expect(deleteResponse.status()).toBe(204);
   });
 });

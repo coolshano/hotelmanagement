@@ -2,6 +2,28 @@
 
 A modern Hotel Management System backend built with **FastAPI**, **SQLAlchemy**, and **SQLite** for development, with a clear migration path to **PostgreSQL**, **Docker**, and **Kubernetes** for production.
 
+## Quick start
+
+```bash
+cp .env.example .env
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+The API starts at <http://127.0.0.1:8000>, Swagger UI is at
+<http://127.0.0.1:8000/docs>, and the database is created and seeded on first
+startup. You can also run `docker compose up --build -d`.
+
+Seeded accounts:
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@auroragrand.test` | `Admin#2026` | Administrator |
+| `ella.hart@example.test` | `Guest#2026` | Registered user |
+| `noah.reid@example.test` | `Guest#2026` | Registered user |
+
 ## 🚀 Features
 
 - RESTful API using FastAPI
@@ -9,12 +31,12 @@ A modern Hotel Management System backend built with **FastAPI**, **SQLAlchemy**,
 - SQLAlchemy ORM
 - SQLite for local development
 - PostgreSQL-ready architecture
-- JWT Authentication (planned)
-- Role-Based Access Control (RBAC)
+- JWT access tokens with rotating, revocable refresh sessions
+- Role-based access control and booking ownership isolation
+- Persistent room, booking, user, guest and payment CRUD
+- Calculated availability, pricing, occupancy and revenue reports
 - Docker support
 - Kubernetes deployment (planned)
-- Clean Architecture
-- Repository & Service Pattern
 - Database migrations using Alembic (planned)
 
 ---
@@ -133,8 +155,12 @@ Future additions:
 
 ```
 POST   /auth/login
+POST   /auth/register
 POST   /auth/logout
 POST   /auth/refresh
+GET    /auth/me
+PATCH  /auth/me
+POST   /auth/change-password
 ```
 
 ## Users
@@ -171,9 +197,17 @@ DELETE /room-types/{id}
 ```
 GET    /rooms
 GET    /rooms/available
+GET    /rooms/{id}
+GET    /rooms/{id}/quote
 POST   /rooms
 PUT    /rooms/{id}
 DELETE /rooms/{id}
+```
+
+## Availability
+
+```
+GET    /availability
 ```
 
 ## Bookings
@@ -182,7 +216,7 @@ DELETE /rooms/{id}
 GET    /bookings
 GET    /bookings/{id}
 POST   /bookings
-PUT    /bookings/{id}
+PATCH  /bookings/{id}
 DELETE /bookings/{id}
 ```
 
@@ -200,21 +234,12 @@ POST   /payments
 GET    /reports/occupancy
 GET    /reports/revenue
 GET    /reports/bookings
+GET    /reports/dashboard
 ```
 
 ---
 
 # ⚙️ Getting Started
-
-## Clone the Repository
-
-```bash
-git clone https://github.com/your-username/hotel-management.git
-
-cd hotel-management
-```
-
----
 
 ## Create a Virtual Environment
 
@@ -277,6 +302,22 @@ OpenAPI JSON
 ```
 http://127.0.0.1:8000/openapi.json
 ```
+
+---
+
+# Tests
+
+The API integration suite uses an isolated SQLite database and requires Node
+20 or newer:
+
+```bash
+cd e2e
+npm install
+npm test
+```
+
+It covers authentication, authorization, rooms, calculated availability,
+booking persistence and overlap conflicts, reports, and administrator CRUD.
 
 ---
 

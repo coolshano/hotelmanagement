@@ -15,5 +15,9 @@ e2e/.env
 # OS
 .DS_Store
 
+# Runtime databases (the original tracked coursework databases are preserved)
+data/hotel_web.db
+data/hotel_test.db
+
 
 

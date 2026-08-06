@@ -1,4 +1,7 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     auth,
@@ -12,9 +15,28 @@ from app.api import (
 )
 
 
+from app.core.config import settings
+from app.database.database import initialize_database
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    initialize_database()
+    yield
+
+
 app = FastAPI(
     title="Hotel Management System API",
-    version="1.0"
+    version="2.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.allowed_origins),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -49,6 +71,11 @@ app.include_router(
 )
 
 app.include_router(
+    rooms.availability_router,
+    tags=["Availability"]
+)
+
+app.include_router(
     bookings.router,
     prefix="/bookings",
     tags=["Bookings"]
@@ -69,6 +96,4 @@ app.include_router(
 
 @app.get("/health")
 def health():
-    return {
-        "status":"UP"
-    }
+    return {"status": "UP"}
