@@ -2,6 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
 
 from app.api import (
     auth,
@@ -11,10 +14,8 @@ from app.api import (
     rooms,
     bookings,
     payments,
-    reports
+    reports,
 )
-
-
 from app.core.config import settings
 from app.database.database import initialize_database
 
@@ -22,7 +23,21 @@ from app.database.database import initialize_database
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     initialize_database()
+
+    redis = aioredis.from_url(
+        settings.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+    )
+
+    FastAPICache.init(
+        RedisBackend(redis),
+        prefix="hotel-management-cache",
+    )
+
     yield
+
+    await redis.close()
 
 
 app = FastAPI(
@@ -39,58 +54,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 app.include_router(
     auth.router,
     prefix="/auth",
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 
 app.include_router(
     users.router,
     prefix="/users",
-    tags=["Users"]
+    tags=["Users"],
 )
 
 app.include_router(
     guests.router,
     prefix="/guests",
-    tags=["Guests"]
+    tags=["Guests"],
 )
 
 app.include_router(
     room_types.router,
     prefix="/room-types",
-    tags=["Room Types"]
+    tags=["Room Types"],
 )
 
 app.include_router(
     rooms.router,
     prefix="/rooms",
-    tags=["Rooms"]
+    tags=["Rooms"],
 )
 
 app.include_router(
     rooms.availability_router,
-    tags=["Availability"]
+    tags=["Availability"],
 )
 
 app.include_router(
     bookings.router,
     prefix="/bookings",
-    tags=["Bookings"]
+    tags=["Bookings"],
 )
 
 app.include_router(
     payments.router,
     prefix="/payments",
-    tags=["Payments"]
+    tags=["Payments"],
 )
 
 app.include_router(
     reports.router,
     prefix="/reports",
-    tags=["Reports"]
+    tags=["Reports"],
 )
 
 
