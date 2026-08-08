@@ -3,6 +3,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi_cache.decorator import cache
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -74,6 +75,7 @@ def _revenue(bookings: list[Booking]) -> dict[str, object]:
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
+@cache(expire=300, namespace="reports")
 def dashboard(db: Db, _admin: Admin):
     bookings = _bookings(db)
     today = date.today()
@@ -90,16 +92,19 @@ def dashboard(db: Db, _admin: Admin):
 
 
 @router.get("/occupancy", response_model=OccupancyResponse)
+@cache(expire=300, namespace="reports")
 def occupancy(db: Db, _admin: Admin):
     bookings = _bookings(db)
     return _occupancy(db, bookings)
 
 
 @router.get("/revenue", response_model=RevenueResponse)
+@cache(expire=300, namespace="reports")
 def revenue(db: Db, _admin: Admin):
     return _revenue(_bookings(db))
 
 
 @router.get("/bookings", response_model=list[BookingResponse])
+@cache(expire=300, namespace="reports")
 def booking_report(db: Db, _admin: Admin):
     return [booking_to_wire(booking) for booking in _bookings(db)]

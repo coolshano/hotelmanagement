@@ -2,6 +2,8 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi_cache import FastAPICache
+from fastapi_cache.decorator import cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -30,12 +32,14 @@ def _rooms_query():
 
 
 @router.get("/", response_model=list[RoomResponse])
+@cache(expire=3600, namespace="rooms")
 def list_rooms(db: Db):
     rooms = db.scalars(_rooms_query().order_by(Room.room_number)).all()
     return [room_to_wire(room) for room in rooms]
 
 
 @router.get("/available", response_model=list[RoomResponse])
+@cache(expire=3600, namespace="rooms")
 def available_rooms(db: Db):
     rooms = db.scalars(
         _rooms_query().where(Room.status.in_(("AVAILABLE", "OCCUPIED"))).order_by(Room.room_number)
@@ -44,6 +48,7 @@ def available_rooms(db: Db):
 
 
 @router.get("/{room_id}", response_model=RoomResponse)
+@cache(expire=3600, namespace="rooms")
 def get_room(room_id: int, db: Db):
     room = db.scalar(_rooms_query().where(Room.id == room_id))
     if not room:
@@ -86,12 +91,14 @@ def search_availability(
 
 
 @router.post("/", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
-def create_room(payload: RoomWriteRequest, db: Db, _admin: Admin):
+async def create_room(payload: RoomWriteRequest, db: Db, _admin: Admin):
     if db.scalar(select(Room.id).where(Room.room_number == payload.room_number)):
         problem(409, "A room with that number already exists.", {"room_number": "This room number is already in use."})
+    
     room_type = db.get(RoomType, payload.room_type_id)
     if not room_type:
         problem(400, "Select a valid room type.", {"room_type_id": "Select a valid room type."})
+        
     room = Room(
         room_number=payload.room_number,
         floor=payload.floor,
@@ -102,20 +109,27 @@ def create_room(payload: RoomWriteRequest, db: Db, _admin: Admin):
     )
     db.add(room)
     db.commit()
+    
+    # Invalidate cache so the new room appears in lists
+    await FastAPICache.clear(namespace="rooms")
+    
     return room_to_wire(db.scalar(_rooms_query().where(Room.id == room.id)))
 
 
 @router.put("/{room_id}", response_model=RoomResponse)
-def update_room(room_id: int, payload: RoomWriteRequest, db: Db, _admin: Admin):
+async def update_room(room_id: int, payload: RoomWriteRequest, db: Db, _admin: Admin):
     room = db.get(Room, room_id)
     if not room:
         problem(404, "We could not find that room.")
+        
     duplicate = db.scalar(select(Room.id).where(Room.room_number == payload.room_number, Room.id != room_id))
     if duplicate:
         problem(409, "A room with that number already exists.", {"room_number": "This room number is already in use."})
+        
     room_type = db.get(RoomType, payload.room_type_id)
     if not room_type:
         problem(400, "Select a valid room type.", {"room_type_id": "Select a valid room type."})
+        
     room.room_number = payload.room_number
     room.floor = payload.floor
     room.status = payload.status
@@ -123,16 +137,26 @@ def update_room(room_id: int, payload: RoomWriteRequest, db: Db, _admin: Admin):
     room.nightly_rate = payload.nightly_rate
     room.description = payload.description or room_type.description
     db.commit()
+    
+    # Invalidate cache to reflect changes in pricing, status, or description
+    await FastAPICache.clear(namespace="rooms")
+    
     return room_to_wire(db.scalar(_rooms_query().where(Room.id == room_id)))
 
 
 @router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_room(room_id: int, db: Db, _admin: Admin):
+async def delete_room(room_id: int, db: Db, _admin: Admin):
     room = db.get(Room, room_id)
     if not room:
         problem(404, "We could not find that room.")
+        
     if db.scalar(select(Booking.id).where(Booking.room_id == room_id).limit(1)):
         problem(409, "This room has booking history and cannot be deleted. Mark it out of service instead.")
+        
     db.delete(room)
     db.commit()
+    
+    # Invalidate cache so the deleted room is removed from lists
+    await FastAPICache.clear(namespace="rooms")
+    
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,15 +1,15 @@
 from datetime import date
-from threading import Lock
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
+from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.errors import problem
 from app.database.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_redis
 from app.models import Booking, Room, User, utc_now
 from app.schemas.api import BookingCreateRequest, BookingResponse, BookingUpdateRequest
 from app.services import (
@@ -25,7 +25,7 @@ from app.services import (
 router = APIRouter()
 Db = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
-booking_write_lock = Lock()
+RedisClient = Annotated[Redis, Depends(get_redis)]
 
 
 def _booking_query():
@@ -66,7 +66,6 @@ def list_bookings(
             or_(
                 func.lower(Booking.reference).like(term),
                 func.lower(User.full_name).like(term),
-                func.lower(User.email).like(term),
                 func.lower(Room.room_number).like(term),
             )
         )
@@ -80,9 +79,17 @@ def get_booking(booking_id: int, current_user: CurrentUser, db: Db):
 
 
 @router.post("/", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
-def create_booking(payload: BookingCreateRequest, current_user: CurrentUser, db: Db):
+async def create_booking(
+    payload: BookingCreateRequest, 
+    current_user: CurrentUser, 
+    db: Db, 
+    redis: RedisClient
+):
     nights = validate_stay_dates(payload.check_in, payload.check_out)
-    with booking_write_lock:
+    
+    # Using a Redis distributed lock. This safely handles concurrent requests 
+    # for the specific room across multiple containers or workers.
+    async with redis.lock(f"lock:room:{payload.room_id}", timeout=5):
         room = db.scalar(select(Room).options(selectinload(Room.room_type)).where(Room.id == payload.room_id))
         if not room:
             problem(404, "We could not find that room.")
@@ -92,6 +99,7 @@ def create_booking(payload: BookingCreateRequest, current_user: CurrentUser, db:
             problem(409, "This room is not currently bookable.")
         if not room_is_free(db, room.id, payload.check_in, payload.check_out):
             problem(409, "Sorry — that room was just booked for those dates. Please choose another.")
+        
         price = price_stay(room, nights)
         booking = Booking(
             reference="pending",
@@ -113,6 +121,7 @@ def create_booking(payload: BookingCreateRequest, current_user: CurrentUser, db:
         db.flush()
         booking.reference = f"AG-{booking.id:05d}"
         db.commit()
+        
     return booking_to_wire(_visible_booking(db, booking.id, current_user))
 
 
@@ -132,6 +141,7 @@ def update_booking(booking_id: int, payload: BookingUpdateRequest, current_user:
     guests = payload.guests or booking.guests
     dates_changed = check_in != booking.check_in or check_out != booking.check_out
     nights = booking.nights
+    
     if dates_changed:
         nights = validate_stay_dates(check_in, check_out)
         if not room_is_free(db, booking.room_id, check_in, check_out, booking.id):

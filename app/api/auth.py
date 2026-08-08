@@ -32,21 +32,25 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 @router.post("/login", response_model=AuthSessionResponse)
 def login(payload: LoginRequest, db: Db):
-    identity = (payload.email or payload.username or "").strip().lower()
-    user = db.scalar(select(User).where(func.lower(User.email) == identity))
+    identity = payload.username.strip().lower()
+    user = db.scalar(select(User).where(func.lower(User.username) == identity))
+    
     if not user or not verify_password(payload.password, user.password_hash):
-        problem(401, "That email address and password do not match.")
+        problem(401, "That username and password do not match.")
+        
     if user.status == "SUSPENDED":
         problem(403, "This account has been suspended. Contact the front desk for help.")
+        
     return {**issue_session(db, user), "user": user_to_wire(user)}
 
 
 @router.post("/register", response_model=AuthSessionResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Db):
-    if db.scalar(select(User.id).where(func.lower(User.email) == payload.email)):
-        problem(409, "An account already exists for that email address.", {"email": "This email is already registered."})
+    if db.scalar(select(User.id).where(func.lower(User.username) == payload.username.lower())):
+        problem(409, "An account already exists for that username.", {"username": "This username is already registered."})
+        
     user = User(
-        email=payload.email,
+        username=payload.username,
         full_name=payload.full_name,
         phone=payload.phone or None,
         password_hash=hash_password(payload.password),
@@ -56,6 +60,7 @@ def register(payload: RegisterRequest, db: Db):
     db.add(user)
     db.commit()
     db.refresh(user)
+    
     return {**issue_session(db, user), "user": user_to_wire(user)}
 
 
@@ -65,11 +70,14 @@ def refresh_token(payload: RefreshRequest, db: Db):
     jti = str(claims["jti"])
     refresh_session = db.scalar(select(RefreshSession).where(RefreshSession.jti == jti))
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    
     if not refresh_session or refresh_session.revoked_at or refresh_session.expires_at <= now:
         problem(401, "Your session has expired. Please sign in again.")
+        
     user = db.get(User, refresh_session.user_id)
     if not user or user.status != "ACTIVE":
         problem(401, "Your session has expired. Please sign in again.")
+        
     refresh_session.revoked_at = now
     return issue_session(db, user)
 
@@ -106,6 +114,7 @@ def update_profile(payload: ProfileUpdateRequest, current_user: CurrentUser, db:
 def change_password(payload: ChangePasswordRequest, current_user: CurrentUser, db: Db):
     if not verify_password(payload.current_password, current_user.password_hash):
         problem(400, "Your current password is not correct.", {"current_password": "Incorrect password."})
+        
     current_user.password_hash = hash_password(payload.new_password)
     db.execute(
         update(RefreshSession)
@@ -113,4 +122,5 @@ def change_password(payload: ChangePasswordRequest, current_user: CurrentUser, d
         .values(revoked_at=datetime.now(timezone.utc).replace(tzinfo=None))
     )
     db.commit()
+    
     return {"message": "Password changed"}
