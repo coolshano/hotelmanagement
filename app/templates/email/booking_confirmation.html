@@ -1,0 +1,88 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+
+<div class="content">
+
+    <h2>Booking Confirmation</h2>
+
+    <p>
+        Dear {{ user.full_name }},
+    </p>
+
+    <p>
+        Thank you for your booking with Royal Crest Hotel.
+        Your reservation has been successfully confirmed.
+    </p>
+
+    <div class="details">
+
+        <div class="row">
+            <span class="label">Booking Reference</span>
+            <span class="value">{{ booking.reference }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Check-in</span>
+            <span class="value">{{ booking.check_in }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Check-out</span>
+            <span class="value">{{ booking.check_out }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Guests</span>
+            <span class="value">{{ booking.guests }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Nights</span>
+            <span class="value">{{ booking.nights }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Nightly Rate</span>
+            <span class="value">
+                {{ booking.currency }} {{ booking.nightly_rate }}
+            </span>
+        </div>
+
+        <div class="row">
+            <span class="label">Subtotal</span>
+            <span class="value">
+                {{ booking.currency }} {{ booking.subtotal }}
+            </span>
+        </div>
+
+        <div class="row">
+            <span class="label">Taxes</span>
+            <span class="value">
+                {{ booking.currency }} {{ booking.taxes }}
+            </span>
+        </div>
+
+        <div class="row">
+            <span class="label total">Total</span>
+            <span class="value total">
+                {{ booking.currency }} {{ booking.total_price }}
+            </span>
+        </div>
+
+    </div>
+
+    {% if booking.special_requests %}
+    <p>
+        <strong>Special requests:</strong><br>
+        {{ booking.special_requests }}
+    </p>
+    {% endif %}
+
+    <p>
+        We look forward to welcoming you to Royal Crest Hotel.
+    </p>
+
+</div>
+
+{% endblock %}

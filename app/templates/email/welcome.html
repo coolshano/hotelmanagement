@@ -1,0 +1,45 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+
+<div class="content">
+
+    <h2>Welcome to Royal Crest Hotel, {{ user.full_name }}!</h2>
+
+    <p>
+        Thank you for creating an account with Royal Crest Hotel.
+    </p>
+
+    <p>
+        Your account has been successfully created and you can now
+        use our hotel management portal to manage your bookings.
+    </p>
+
+    <div class="details">
+
+        <div class="row">
+            <span class="label">Name</span>
+            <span class="value">{{ user.full_name }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Email</span>
+            <span class="value">{{ user.email }}</span>
+        </div>
+
+        {% if user.phone %}
+        <div class="row">
+            <span class="label">Phone</span>
+            <span class="value">{{ user.phone }}</span>
+        </div>
+        {% endif %}
+
+    </div>
+
+    <p>
+        We look forward to welcoming you to Royal Crest Hotel.
+    </p>
+
+</div>
+
+{% endblock %}

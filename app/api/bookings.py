@@ -1,5 +1,7 @@
 from datetime import date
 from typing import Annotated
+import logging
+from app.notifications import send_booking_confirmation_email
 
 from fastapi import APIRouter, Depends, Query, status
 from redis.asyncio import Redis
@@ -23,6 +25,7 @@ from app.services import (
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 Db = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 RedisClient = Annotated[Redis, Depends(get_redis)]
@@ -78,29 +81,80 @@ def get_booking(booking_id: int, current_user: CurrentUser, db: Db):
     return booking_to_wire(_visible_booking(db, booking_id, current_user))
 
 
-@router.post("/", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=BookingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_booking(
-    payload: BookingCreateRequest, 
-    current_user: CurrentUser, 
-    db: Db, 
-    redis: RedisClient
+    payload: BookingCreateRequest,
+    current_user: CurrentUser,
+    db: Db,
+    redis: RedisClient,
 ):
-    nights = validate_stay_dates(payload.check_in, payload.check_out)
-    
-    # Using a Redis distributed lock. This safely handles concurrent requests 
-    # for the specific room across multiple containers or workers.
-    async with redis.lock(f"lock:room:{payload.room_id}", timeout=5):
-        room = db.scalar(select(Room).options(selectinload(Room.room_type)).where(Room.id == payload.room_id))
+    nights = validate_stay_dates(
+        payload.check_in,
+        payload.check_out,
+    )
+
+    # Redis distributed lock prevents two users/workers
+    # from booking the same room simultaneously.
+    async with redis.lock(
+        f"lock:room:{payload.room_id}",
+        timeout=5,
+    ):
+        room = db.scalar(
+            select(Room)
+            .options(selectinload(Room.room_type))
+            .where(Room.id == payload.room_id)
+        )
+
         if not room:
-            problem(404, "We could not find that room.")
+            problem(
+                404,
+                "We could not find that room.",
+            )
+
         if payload.guests > room.room_type.max_occupancy:
-            problem(400, f"This room sleeps a maximum of {room.room_type.max_occupancy} guests.", {"guests": f"Maximum {room.room_type.max_occupancy} guests for this room."})
-        if room.status in {"MAINTENANCE", "OUT_OF_SERVICE"}:
-            problem(409, "This room is not currently bookable.")
-        if not room_is_free(db, room.id, payload.check_in, payload.check_out):
-            problem(409, "Sorry — that room was just booked for those dates. Please choose another.")
-        
-        price = price_stay(room, nights)
+            problem(
+                400,
+                f"This room sleeps a maximum of "
+                f"{room.room_type.max_occupancy} guests.",
+                {
+                    "guests": (
+                        f"Maximum "
+                        f"{room.room_type.max_occupancy} "
+                        f"guests for this room."
+                    )
+                },
+            )
+
+        if room.status in {
+            "MAINTENANCE",
+            "OUT_OF_SERVICE",
+        }:
+            problem(
+                409,
+                "This room is not currently bookable.",
+            )
+
+        if not room_is_free(
+            db,
+            room.id,
+            payload.check_in,
+            payload.check_out,
+        ):
+            problem(
+                409,
+                "Sorry — that room was just booked "
+                "for those dates. Please choose another.",
+            )
+
+        price = price_stay(
+            room,
+            nights,
+        )
+
         booking = Booking(
             reference="pending",
             user_id=current_user.id,
@@ -115,14 +169,46 @@ async def create_booking(
             total_price=price["total"],
             currency=settings.currency,
             status="CONFIRMED",
-            special_requests=payload.special_requests or None,
+            special_requests=(
+                payload.special_requests or None
+            ),
         )
+
         db.add(booking)
+
+        # Flush assigns the database-generated ID.
         db.flush()
-        booking.reference = f"AG-{booking.id:05d}"
+
+        booking.reference = (
+            f"AG-{booking.id:05d}"
+        )
+
         db.commit()
-        
-    return booking_to_wire(_visible_booking(db, booking.id, current_user))
+
+        # Refresh relationships after commit so the
+        # notification service has the latest data.
+        db.refresh(booking)
+
+    # Send the email AFTER the booking has been committed.
+    #
+    # Email failure must NOT make the booking fail.
+    try:
+        send_booking_confirmation_email(booking)
+    except Exception:
+        logger.exception(
+            "Failed to send booking confirmation email "
+            "for booking %s to %s",
+            booking.reference,
+            current_user.email,
+        )
+
+    return booking_to_wire(
+        _visible_booking(
+            db,
+            booking.id,
+            current_user,
+        )
+    )
 
 
 @router.patch("/{booking_id}", response_model=BookingResponse)
