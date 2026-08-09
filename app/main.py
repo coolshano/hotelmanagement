@@ -22,21 +22,25 @@ from app.database.database import initialize_database
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Initialize database
     initialize_database()
 
+    # Initialize Redis connection
     redis = aioredis.from_url(
         settings.redis_url,
         encoding="utf-8",
         decode_responses=True,
     )
 
+    # Initialize FastAPI cache
     FastAPICache.init(
         RedisBackend(redis),
-        prefix="hotel-management-cache",
+        prefix="hotel-cache",
     )
 
     yield
 
+    # Close Redis connection when application shuts down
     await redis.close()
 
 
@@ -46,6 +50,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.allowed_origins),
@@ -54,53 +60,71 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Authentication
 app.include_router(
     auth.router,
     prefix="/auth",
     tags=["Authentication"],
 )
 
+
+# Users
 app.include_router(
     users.router,
     prefix="/users",
     tags=["Users"],
 )
 
+
+# Guests
 app.include_router(
     guests.router,
     prefix="/guests",
     tags=["Guests"],
 )
 
+
+# Room Types
 app.include_router(
     room_types.router,
     prefix="/room-types",
     tags=["Room Types"],
 )
 
+
+# Rooms
 app.include_router(
     rooms.router,
     prefix="/rooms",
     tags=["Rooms"],
 )
 
+
+# Room Availability
 app.include_router(
     rooms.availability_router,
     tags=["Availability"],
 )
 
+
+# Bookings
 app.include_router(
     bookings.router,
     prefix="/bookings",
     tags=["Bookings"],
 )
 
+
+# Payments
 app.include_router(
     payments.router,
     prefix="/payments",
     tags=["Payments"],
 )
 
+
+# Reports
 app.include_router(
     reports.router,
     prefix="/reports",
@@ -108,6 +132,8 @@ app.include_router(
 )
 
 
+# Health Check
 @app.get("/health")
 def health():
     return {"status": "UP"}
+

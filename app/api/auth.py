@@ -32,38 +32,63 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 @router.post("/login", response_model=AuthSessionResponse)
 def login(payload: LoginRequest, db: Db):
-    identity = payload.username.strip().lower()
-    user = db.scalar(select(User).where(func.lower(User.username) == identity))
-    
-    if not user or not verify_password(payload.password, user.password_hash):
-        problem(401, "That username and password do not match.")
-        
+    email = payload.email.strip().lower()
+
+    user = db.scalar(
+        select(User).where(func.lower(User.email) == email)
+    )
+
+    if not user or not verify_password(
+        payload.password,
+        user.password_hash,
+    ):
+        problem(401, "That email and password do not match.")
+
     if user.status == "SUSPENDED":
-        problem(403, "This account has been suspended. Contact the front desk for help.")
-        
-    return {**issue_session(db, user), "user": user_to_wire(user)}
+        problem(
+            403,
+            "This account has been suspended. Contact the front desk for help.",
+        )
 
+    return {
+        **issue_session(db, user),
+        "user": user_to_wire(user),
+    }
 
-@router.post("/register", response_model=AuthSessionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=AuthSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def register(payload: RegisterRequest, db: Db):
-    if db.scalar(select(User.id).where(func.lower(User.username) == payload.username.lower())):
-        problem(409, "An account already exists for that username.", {"username": "This username is already registered."})
-        
+    email = payload.email.strip().lower()
+
+    if db.scalar(
+        select(User.id).where(func.lower(User.email) == email)
+    ):
+        problem(
+            409,
+            "An account already exists for that email.",
+            {"email": "This email is already registered."},
+        )
+
     user = User(
-        username=payload.username,
+        email=email,
         full_name=payload.full_name,
         phone=payload.phone or None,
         password_hash=hash_password(payload.password),
         role="REGISTERED_USER",
         status="ACTIVE",
     )
+
     db.add(user)
     db.commit()
     db.refresh(user)
-    
-    return {**issue_session(db, user), "user": user_to_wire(user)}
 
-
+    return {
+        **issue_session(db, user),
+        "user": user_to_wire(user),
+    }
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(payload: RefreshRequest, db: Db):
     claims = decode_token(payload.refresh_token, "refresh")

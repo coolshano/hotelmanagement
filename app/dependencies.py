@@ -45,11 +45,12 @@ def require_admin(current_user: Annotated[User, Depends(get_current_user)]) -> U
 
 async def get_redis() -> Redis:
     redis = Redis.from_url(
-        settings.REDIS_URL, 
-        encoding="utf8", 
-        decode_responses=True
+        settings.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
     )
+
     try:
         yield redis
     finally:
-        await redis.aclose()
+        await redis.close()

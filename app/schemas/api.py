@@ -37,15 +37,13 @@ class RequestModel(BaseModel):
 
 
 class LoginRequest(RequestModel):
-    email: str | None = None
-    username: str | None = None
+    email: str
     password: str = Field(min_length=1)
 
-    @model_validator(mode="after")
-    def require_identity(self):
-        if not self.email and not self.username:
-            raise ValueError("Email is required.")
-        return self
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class RegisterRequest(RequestModel):

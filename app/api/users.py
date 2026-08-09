@@ -38,25 +38,36 @@ def get_user(user_id: int, db: Db, _admin: Admin):
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(payload: UserCreateRequest, db: Db, _admin: Admin):
-    if db.scalar(select(User.id).where(func.lower(User.username) == payload.username.lower())):
-        problem(409, "An account already exists for that username.", {"username": "This username is already registered."})
-    
+    email = payload.email.strip().lower()
+
+    if db.scalar(
+        select(User.id).where(func.lower(User.email) == email)
+    ):
+        problem(
+            409,
+            "An account already exists for that email.",
+            {"email": "This email is already registered."},
+        )
+
     user = User(
-        username=payload.username,
+        email=email,
         full_name=payload.full_name,
         phone=payload.phone or None,
         password_hash=hash_password(payload.password),
         role=payload.role,
         status="ACTIVE",
     )
+
     db.add(user)
     db.commit()
     db.refresh(user)
-    
+
     # Invalidate cache so the new user appears immediately in the admin lists
     await FastAPICache.clear(namespace="users")
-    
+
     return user_to_wire(user)
+
+
 
 
 @router.put("/{user_id}", response_model=UserResponse)
