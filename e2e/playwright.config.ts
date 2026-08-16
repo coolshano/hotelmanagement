@@ -26,8 +26,8 @@ export default defineConfig({
   // so `npx playwright test` works standalone without a manually started server.
   webServer: {
     command:
-      "HMS_RESET_DATABASE=true DATABASE_URL=sqlite:////private/tmp/hotelmanagement-e2e.db " +
-      ".venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port " +
+      "HMS_RESET_DATABASE=true DATABASE_URL=sqlite:////tmp/hotelmanagement-e2e.db " +
+      "python -m uvicorn app.main:app --host 127.0.0.1 --port " +
       PORT,
     cwd: "..",
     url: `${BASE_URL}/health`,
