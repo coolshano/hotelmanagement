@@ -1,10 +1,4 @@
-import { test, expect } from "./fixtures/fixtures";
-
-function isoAfter(days: number): string {
-  const value = new Date();
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
+import { test, expect, isoAfter } from "./fixtures/fixtures";
 
 test.describe("Rooms API", () => {
   test("GET /rooms/ lists rooms", async ({ request }) => {
@@ -71,5 +65,10 @@ test.describe("Rooms API", () => {
 
     const deleteResponse = await adminRequest.delete(`/rooms/${created.id}`);
     expect(deleteResponse.status()).toBe(204);
+
+    const listResponse = await adminRequest.get("/rooms/");
+    expect(listResponse.ok()).toBeTruthy();
+    const rooms = await listResponse.json();
+    expect(rooms.some((room: { id: number }) => room.id === created.id)).toBeFalsy();
   });
 });

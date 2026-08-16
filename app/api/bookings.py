@@ -99,6 +99,15 @@ async def create_booking(
 
     # Redis distributed lock prevents two users/workers
     # from booking the same room simultaneously.
+    #
+    # TODO: under genuine concurrent requests for the same room, the
+    # second request's lock.release() intermittently raises
+    # redis.exceptions.LockNotOwnedError, turning what should be a
+    # clean 409 into an unhandled 500. Reproduced by
+    # e2e/tests/bookings.spec.ts's "the Redis room lock allows only
+    # one of two concurrent bookings..." test. Needs investigation
+    # into the acquire/release/expiry timing before this is safe
+    # under real concurrent load.
     async with redis.lock(
         f"lock:room:{payload.room_id}",
         timeout=5,
@@ -192,6 +201,12 @@ async def create_booking(
     # Send the email AFTER the booking has been committed.
     #
     # Email failure must NOT make the booking fail.
+    #
+    # TODO: this call is synchronous and blocks the event loop for the
+    # full SMTP round-trip, freezing every other in-flight request on
+    # this worker. auth.py's register() avoids this via
+    # `await to_thread.run_sync(send_welcome_email, user)` — apply the
+    # same fix here.
     try:
         send_booking_confirmation_email(booking)
     except Exception:

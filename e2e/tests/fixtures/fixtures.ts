@@ -49,3 +49,9 @@ export const test = base.extend<ApiFixtures>({
 });
 
 export { expect } from "@playwright/test";
+
+export function isoAfter(days: number): string {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
