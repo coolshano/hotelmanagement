@@ -1,6 +1,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from fastapi_cache import FastAPICache
+from fastapi_cache.decorator import cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,15 +20,17 @@ Admin = Annotated[User, Depends(require_admin)]
 
 
 @router.get("/", response_model=list[PaymentResponse])
+@cache(expire=3600, namespace="payments")
 def payments(db: Db, _admin: Admin):
     values = db.scalars(select(Payment).order_by(Payment.paid_at.desc())).all()
     return [payment_to_wire(value) for value in values]
 
 
 @router.post("/", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
-def create_payment(payload: PaymentCreateRequest, db: Db, _admin: Admin):
+async def create_payment(payload: PaymentCreateRequest, db: Db, _admin: Admin):
     if not db.get(Booking, payload.booking_id):
         problem(404, "We could not find that booking.")
+    
     value = Payment(
         booking_id=payload.booking_id,
         amount=payload.amount,
@@ -36,10 +40,15 @@ def create_payment(payload: PaymentCreateRequest, db: Db, _admin: Admin):
     db.add(value)
     db.commit()
     db.refresh(value)
+    
+    # Invalidate the cache so the new payment appears immediately on the dashboard
+    await FastAPICache.clear(namespace="payments")
+    
     return payment_to_wire(value)
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
+@cache(expire=3600, namespace="payments")
 def get_payment(payment_id: int, db: Db, _admin: Admin):
     value = db.get(Payment, payment_id)
     if not value:

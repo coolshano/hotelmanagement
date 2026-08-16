@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ subject }}</title>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #333333;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #1f2937;
+            padding: 28px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 26px;
+        }
+
+        .content {
+            padding: 35px;
+        }
+
+        .content h2 {
+            color: #1f2937;
+        }
+
+        .details {
+            margin: 25px 0;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .row:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            color: #6b7280;
+        }
+
+        .value {
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .total {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .footer {
+            padding: 25px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+            background: #f9fafb;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #1f2937;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Royal Crest Hotel</h1>
+    </div>
+
+    {% block content %}
+    {% endblock %}
+
+    <div class="footer">
+        <p>Thank you for choosing Royal Crest Hotel.</p>
+        <p>This is an automated email. Please do not reply.</p>
+    </div>
+
+</div>
+
+</body>
+</html>

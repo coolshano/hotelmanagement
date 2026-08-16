@@ -11,6 +11,9 @@ from app.core.security import decode_token
 from app.database.database import get_db
 from app.models import User
 
+from redis.asyncio import Redis
+from app.core.config import settings
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
@@ -39,3 +42,15 @@ def require_admin(current_user: Annotated[User, Depends(get_current_user)]) -> U
         problem(403, "You do not have permission to perform this action.")
     return current_user
 
+
+async def get_redis() -> Redis:
+    redis = Redis.from_url(
+        settings.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+    )
+
+    try:
+        yield redis
+    finally:
+        await redis.close()
