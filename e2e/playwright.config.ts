@@ -27,6 +27,7 @@ export default defineConfig({
   webServer: {
     command:
       "HMS_RESET_DATABASE=true DATABASE_URL=sqlite:////tmp/hotelmanagement-e2e.db " +
+      "REDIS_URL=redis://localhost:6379/0 " +
       "python -m uvicorn app.main:app --host 127.0.0.1 --port " +
       PORT,
     cwd: "..",
