@@ -1,18 +1,24 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
 from fastapi_cache import FastAPICache
 from fastapi_cache.decorator import cache
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.errors import problem
 from app.core.security import hash_password
 from app.database.database import get_db
 from app.dependencies import require_admin
-from app.models import Booking, User
-from app.schemas.api import UserCreateRequest, UserResponse, UserUpdateRequest
-from app.services import ACTIVE_BOOKING_STATUSES, user_to_wire
+from app.models import BiometricCredential, Booking, User
+from app.schemas.api import (
+    BiometricDeviceResponse,
+    UserCreateRequest,
+    UserResponse,
+    UserUpdateRequest,
+)
+from app.services import ACTIVE_BOOKING_STATUSES, biometric_to_wire, user_to_wire
 
 
 router = APIRouter()
@@ -113,4 +119,49 @@ async def delete_user(user_id: int, db: Db, admin: Admin):
     # Invalidate cache so the deleted user is removed from lists
     await FastAPICache.clear(namespace="users")
     
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------- biometrics
+#
+# The mobile app enrols a device against an admin account; this is where an
+# administrator clears that enrolment remotely - a lost or reassigned phone
+# loses biometric access the next time it tries to sign in.
+
+
+@router.get("/{user_id}/biometric", response_model=list[BiometricDeviceResponse])
+def get_user_biometric_devices(user_id: int, db: Db, _admin: Admin):
+    user = db.get(User, user_id)
+    if not user:
+        problem(404, "We could not find that user.")
+
+    credentials = db.scalars(
+        select(BiometricCredential)
+        .where(
+            BiometricCredential.user_id == user_id,
+            BiometricCredential.revoked_at.is_(None),
+        )
+        .order_by(BiometricCredential.created_at.desc())
+    ).all()
+
+    return [biometric_to_wire(credential) for credential in credentials]
+
+
+@router.delete("/{user_id}/biometric", status_code=status.HTTP_204_NO_CONTENT)
+def reset_user_biometric(user_id: int, db: Db, _admin: Admin):
+    user = db.get(User, user_id)
+    if not user:
+        problem(404, "We could not find that user.")
+
+    db.execute(
+        update(BiometricCredential)
+        .where(
+            BiometricCredential.user_id == user_id,
+            BiometricCredential.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc).replace(tzinfo=None))
+    )
+
+    db.commit()
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -3,8 +3,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: hotel_redis
-    ports:
-      - "6379:6379"
+    # Not published to the host: the backend reaches Redis over the compose
+    # network. Publishing it clashes with a locally installed Redis and would
+    # expose the cache to the whole LAN.
+    expose:
+      - "6379"
     restart: unless-stopped
 
   backend:
@@ -17,7 +20,7 @@ services:
       DATABASE_URL: sqlite:////data/hotel.db
       REDIS_URL: redis://redis:6379/0
       HMS_SECRET_KEY: local-compose-secret-change-before-deployment
-      HMS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      HMS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006
     volumes:
       - hotel-data:/data
     depends_on:
