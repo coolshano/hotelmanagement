@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import problem
-from app.models import Booking, Payment, Room, RoomType, User
+from app.models import BiometricCredential, Booking, Payment, Room, RoomType, User
 
 
 ACTIVE_BOOKING_STATUSES = ("PENDING", "CONFIRMED", "CHECKED_IN")
@@ -78,6 +78,16 @@ def user_to_wire(user: User) -> dict[str, object]:
         "role": user.role,
         "status": user.status,
         "created_at": user.created_at,
+    }
+
+
+def biometric_to_wire(credential: BiometricCredential) -> dict[str, object]:
+    return {
+        "id": credential.id,
+        "device_id": credential.device_id,
+        "device_label": credential.device_label,
+        "created_at": credential.created_at,
+        "last_used_at": credential.last_used_at,
     }
 
 

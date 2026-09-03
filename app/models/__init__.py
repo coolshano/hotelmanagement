@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.database import Base
@@ -26,6 +35,9 @@ class User(Base):
 
     bookings: Mapped[list["Booking"]] = relationship(back_populates="user")
     refresh_sessions: Mapped[list["RefreshSession"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    biometric_credentials: Mapped[list["BiometricCredential"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -112,6 +124,30 @@ class RefreshSession(Base):
     user: Mapped[User] = relationship(back_populates="refresh_sessions")
 
 
+class BiometricCredential(Base):
+    """A biometric enrolment bound to one device for one user.
+
+    The device holds the plaintext secret behind the OS keystore; we only ever
+    store its PBKDF2 hash, so a database leak cannot be replayed as a login.
+    Revoking a row (from the admin web UI or the owner's profile page) is what
+    makes a remote biometric reset take effect on the phone.
+    """
+
+    __tablename__ = "app_biometric_credentials"
+    __table_args__ = (UniqueConstraint("user_id", "device_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("app_users.id"), index=True)
+    device_id: Mapped[str] = mapped_column(String(64), index=True)
+    device_label: Mapped[str] = mapped_column(String(80), default="")
+    secret_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="biometric_credentials")
+
+
 class Guest(Base):
     __tablename__ = "app_guests"
 
@@ -124,6 +160,7 @@ class Guest(Base):
 
 
 __all__ = [
+    "BiometricCredential",
     "Booking",
     "Guest",
     "Payment",

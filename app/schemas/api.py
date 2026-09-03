@@ -112,6 +112,32 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class BiometricEnrollRequest(RequestModel):
+    device_id: str = Field(min_length=8, max_length=64)
+    device_label: str = Field(default="", max_length=80)
+
+
+class BiometricLoginRequest(RequestModel):
+    email: str
+    device_id: str = Field(min_length=8, max_length=64)
+    biometric_token: str = Field(min_length=16, max_length=255)
+
+    _normalise_email = field_validator("email")(_email)
+
+
+class BiometricDeviceResponse(BaseModel):
+    id: int
+    device_id: str
+    device_label: str
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class BiometricEnrollResponse(BiometricDeviceResponse):
+    # Returned exactly once, at enrolment. The server only keeps its hash.
+    biometric_token: str
+
+
 class RoomTypeWriteRequest(RequestModel):
     name: str = Field(min_length=2, max_length=80)
     description: str = Field(default="", max_length=600)
